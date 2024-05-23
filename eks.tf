@@ -1,28 +1,23 @@
-provider "aws" {
-  region = var.aws_region
-}
 
-module "vpc" {
-  source  = "terraform-aws-modules/vpc/aws"
-  version = "5.8.0"
-  name    = var.vpc_name
-  cidr    = var.vpc_cidr
 
-  azs             = ["us-east-1a", "us-east-1b", "us-east-1c"]
-  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
-  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+# resource "aws_iam_role_policy_attachment" "eks_cni_policy" {
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEKS_CNI_Policy"
+#   role       = module.eks.node_group_role_name
+# }
 
-  enable_nat_gateway   = true
-  single_nat_gateway   = true
-  enable_dns_hostnames = true
-}
+# resource "aws_iam_role_policy_attachment" "eks_service_policy" {
+#   policy_arn = "arn:aws:iam::aws:policy/AmazonEC2ContainerServiceforEC2Role"
+#   role       = module.eks.node_group_role_name
+# }
+
+
 
 module "eks" {
   source  = "terraform-aws-modules/eks/aws"
-  version = "~> 20.0"
+  version = "19.0.4"
 
-  cluster_name    = var.cluster_name
-  cluster_version = "1.29"
+  cluster_name    = local.cluster_name
+  cluster_version = "1.24"
 
   vpc_id                         = module.vpc.vpc_id
   subnet_ids                     = module.vpc.private_subnets
@@ -54,13 +49,22 @@ module "eks" {
       desired_size = 1
     }
   }
-
 }
 
 resource "aws_security_group_rule" "allow_redis" {
   type              = "ingress"
   from_port         = 6379
   to_port           = 6379
+  protocol          = "tcp"
+  cidr_blocks       = ["0.0.0.0/0"]
+  security_group_id = module.eks.cluster_security_group_id
+}
+
+# Allow SSH to the EKS nodes
+resource "aws_security_group_rule" "allow_ssh" {
+  type              = "ingress"
+  from_port         = 22
+  to_port           = 22
   protocol          = "tcp"
   cidr_blocks       = ["0.0.0.0/0"]
   security_group_id = module.eks.cluster_security_group_id
